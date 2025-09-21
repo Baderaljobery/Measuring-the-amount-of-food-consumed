@@ -12,21 +12,7 @@ from sklearn.mixture import GaussianMixture
 
 
 class PrecisionFoodDetector:
-    """
-    نظام تقدير استهلاك الطعام باستخدام الرؤية الحاسوبية التقليدية (بدون شبكات عميقة).
 
-    المراحل:
-      1) Preprocessing: Bilateral + CLAHE(LAB)
-      2) Plate/Container mask: Edges/Contours (+ fallback)
-      3) Segmentation: Gaussian Mixture (GMM) على ميزات لونية + مكانية
-      4) Refinement: عمليات مورفولوجية + إزالة المكوّنات الصغيرة
-      5) قياس المساحة ثم حساب النِّسَب قبل/بعد
-
-    Parameters
-    ----------
-    debug_mode : bool
-        لطباعة معلومات أثناء التنفيذ.
-    """
 
     def __init__(self, debug_mode: bool = True) -> None:
         self.debug_mode = debug_mode
