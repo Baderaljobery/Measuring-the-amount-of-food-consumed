@@ -31,8 +31,9 @@ class PrecisionFoodDetector:
     def __init__(self, debug_mode: bool = True) -> None:
         self.debug_mode = debug_mode
 
+
     def load_and_preprocess(self, image_path: str) -> np.ndarray:
-      
+
         img = cv2.imread(image_path)
         if img is None:
             raise ValueError(f"Cannot load image: {image_path}")
@@ -47,13 +48,13 @@ class PrecisionFoodDetector:
         return img_rgb
 
     def advanced_preprocessing(self, img_rgb: np.ndarray) -> np.ndarray:
-      
+
         img_float = img_rgb.astype(np.float32) / 255.0
 
-        
+        # Bilateral (يُطبَّق على [0..255] ثم نعود إلى [0..1])
         filtered_u8 = cv2.bilateralFilter((img_float * 255).astype(np.uint8), d=9, sigmaColor=75, sigmaSpace=75)
 
-        
+    
         lab = cv2.cvtColor(filtered_u8, cv2.COLOR_RGB2LAB)
         clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
         lab[:, :, 0] = clahe.apply(lab[:, :, 0])
@@ -61,9 +62,9 @@ class PrecisionFoodDetector:
         enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
         return enhanced
 
-      
+
     def detect_container_boundary(self, img_rgb: np.ndarray) -> np.ndarray:
-       
+
         gray = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2GRAY)
 
         edges_fine = cv2.Canny(gray, 50, 150, apertureSize=3)
@@ -79,22 +80,22 @@ class PrecisionFoodDetector:
         if contours:
             largest = max(contours, key=cv2.contourArea)
             cv2.fillPoly(mask, [largest], 255)
-            
+   
             mask = cv2.erode(mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (15, 15)), iterations=1)
             return mask
 
-        
+
         cv2.ellipse(mask, (w // 2, h // 2), (w // 3, h // 3), 0, 0, 360, 255, -1)
         return mask
 
 
     def gaussian_mixture_segmentation(self, img_rgb: np.ndarray, container_mask: np.ndarray) -> np.ndarray:
-        
+
         h, w = img_rgb.shape[:2]
         if container_mask is None or cv2.countNonZero(container_mask) == 0:
             return np.zeros((h, w), dtype=np.uint8)
 
-        
+
         hsv = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2HSV)
         lab = cv2.cvtColor(img_rgb, cv2.COLOR_RGB2LAB)
 
@@ -102,7 +103,7 @@ class PrecisionFoodDetector:
         if len(xs) == 0:
             return np.zeros((h, w), dtype=np.uint8)
 
-        
+      
         rgb_feats = img_rgb[ys, xs].astype(np.float32) / 255.0
         hsv_feats = hsv[ys, xs].astype(np.float32) / np.array([180.0, 255.0, 255.0], dtype=np.float32)
         lab_feats = lab[ys, xs].astype(np.float32) / np.array([100.0, 255.0, 255.0], dtype=np.float32)
@@ -110,13 +111,13 @@ class PrecisionFoodDetector:
 
         features = np.concatenate([rgb_feats, hsv_feats, lab_feats, spatial], axis=1)
 
-        
+      
         n_components = int(min(8, max(2, features.shape[0] // 100 + 2)))
         gmm = GaussianMixture(n_components=n_components, covariance_type="full", random_state=42)
         labels = gmm.fit_predict(features)
 
-        
-         food_mask = np.zeros((h, w), dtype=np.uint8)
+       
+        food_mask = np.zeros((h, w), dtype=np.uint8)
 
         for cid in range(n_components):
             cluster_idx = (labels == cid)
@@ -126,14 +127,14 @@ class PrecisionFoodDetector:
             cluster_feats = features[cluster_idx]                 # (N_c, F)
             cluster_pos = np.stack([ys[cluster_idx], xs[cluster_idx]], axis=1)  # (N_c, 2)
 
-            
+
             if self.analyze_cluster_for_food(cluster_feats):
                 food_mask[cluster_pos[:, 0], cluster_pos[:, 1]] = 255
 
         return food_mask
 
     def analyze_cluster_for_food(self, cluster_features: np.ndarray) -> bool:
-        
+
         if cluster_features.size == 0:
             return False
 
@@ -145,20 +146,20 @@ class PrecisionFoodDetector:
         mean_val = float(np.mean(hsv[:, 2]))
         mean_rgb_std = float(np.mean(np.std(rgb, axis=0)))
 
-       
+
         cluster_size_ok = (len(cluster_features) >= 200)
 
         is_food = (
-            mean_sat > 25 and          
-            20 < mean_val < 220 and    
-            mean_rgb_std > 5 and       
+            mean_sat > 25 and
+            20 < mean_val < 220 and
+            mean_rgb_std > 5 and
             cluster_size_ok
         )
         return is_food
 
 
     def refine_with_morphology(self, mask: np.ndarray, reference_img: np.ndarray) -> np.ndarray:
-        
+   
         if mask is None or mask.size == 0:
             return mask
 
@@ -167,10 +168,10 @@ class PrecisionFoodDetector:
 
         num_labels, labels, stats, _ = cv2.connectedComponentsWithStats(mask)
         total_pixels = reference_img.shape[0] * reference_img.shape[1]
-        min_area = max(1, int(total_pixels * 0.001))  
+        min_area = max(1, int(total_pixels * 0.001)) 
 
         refined = np.zeros_like(mask)
-        for i in range(1, num_labels):  
+        for i in range(1, num_labels): 
             if stats[i, cv2.CC_STAT_AREA] >= min_area:
                 refined[labels == i] = 255
 
@@ -178,7 +179,7 @@ class PrecisionFoodDetector:
 
 
     def detect_food_in_image(self, image_path: str) -> Optional[Dict[str, Any]]:
-       
+
         try:
             img = self.load_and_preprocess(image_path)
             enhanced = self.advanced_preprocessing(img)
@@ -214,17 +215,17 @@ class PrecisionFoodDetector:
 
 
     def calculate_consumption(self, before_path: str, after_path: str) -> Optional[Dict[str, Any]]:
-        
-        print("🔍 PRECISION FOOD DETECTION SYSTEM")
+
+        print(" PRECISION FOOD DETECTION SYSTEM")
         print("=" * 50)
 
-        print("\n📷 Processing BEFORE image...")
+        print("\n Processing BEFORE image...")
         before = self.detect_food_in_image(before_path)
         if before is None:
             print("❌ Failed to process BEFORE image")
             return None
 
-        print("\n📷 Processing AFTER image...")
+        print("\n Processing AFTER image...")
         after = self.detect_food_in_image(after_path)
         if after is None:
             print("❌ Failed to process AFTER image")
@@ -240,7 +241,7 @@ class PrecisionFoodDetector:
             consumed_pct = 0.0
             remaining_pct = 0.0
 
- 
+
         consumed_pct = float(np.clip(consumed_pct, 0.0, 100.0))
         remaining_pct = float(np.clip(remaining_pct, 0.0, 100.0))
 
@@ -255,7 +256,7 @@ class PrecisionFoodDetector:
 
 
     def visualize_results(self, results: Dict[str, Any]) -> None:
-        
+
         fig, axes = plt.subplots(3, 4, figsize=(20, 15))
 
         before = results["before_result"]
@@ -294,17 +295,17 @@ class PrecisionFoodDetector:
         axes[2, 3].text(0.1, 0.25, f"{results['remaining_percentage']:.1f}%", fontsize=28, color="green", fontweight="bold", transform=axes[2, 3].transAxes)
         axes[2, 3].axis("off")
 
-        plt.suptitle("🎯 PRECISION FOOD DETECTION RESULTS", fontsize=18, fontweight="bold")
+        plt.suptitle(" PRECISION FOOD DETECTION RESULTS", fontsize=18, fontweight="bold")
         plt.tight_layout()
         plt.show()
 
 
 
 def precision_food_analysis(before_image: str, after_image: str) -> Optional[float]:
-    
+
     detector = PrecisionFoodDetector(debug_mode=True)
-    print("🚀 Starting PRECISION FOOD DETECTION")
-    print("🔬 Using: Gaussian Mixture Model + Advanced Computer Vision")
+    print(" Starting PRECISION FOOD DETECTION")
+    print(" Using: Gaussian Mixture Model + Advanced Computer Vision")
 
     results = detector.calculate_consumption(before_image, after_image)
     if results:
@@ -316,7 +317,7 @@ def precision_food_analysis(before_image: str, after_image: str) -> Optional[flo
 
 
 def test_single_image(image_path: str) -> Optional[Dict[str, Any]]:
-    
+
     detector = PrecisionFoodDetector(debug_mode=True)
     result = detector.detect_food_in_image(image_path)
 
@@ -335,21 +336,21 @@ def test_single_image(image_path: str) -> Optional[Dict[str, Any]]:
 
 
 if __name__ == "__main__":
-    #عدّل المسارات حسب صورك
+    # عدّل المسارات حسب صورك
     before_path = "/content/6befor.jpg"
     after_path  = "/content/6-2after.jpg"
 
-    print("🎯 PRECISION FOOD DETECTOR")
-    print("🔬 Advanced Computer Vision System")
+    print(" PRECISION FOOD DETECTOR")
+    print(" Advanced Computer Vision System")
     print("-" * 40)
 
-    
+
     # test_single_image(before_path)
 
-   
+
     consumption = precision_food_analysis(before_path, after_path)
     if consumption is not None:
         print(f"\n✅ FINAL RESULT: {consumption:.1f}% of food consumed")
-        print("🎯 High precision analysis complete!")
+        print(" High precision analysis complete!")
     else:
         print("\n❌ Could not complete analysis")
