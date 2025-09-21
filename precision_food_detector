@@ -337,7 +337,7 @@ def test_single_image(image_path: str) -> Optional[Dict[str, Any]]:
 
 if __name__ == "__main__":
     # عدّل المسارات حسب صورك
-    before_path = "imge befor"
+    before_path = "imge before"
     after_path  = "imge after"
 
     print(" PRECISION FOOD DETECTOR")
